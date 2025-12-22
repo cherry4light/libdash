@@ -67,6 +67,9 @@ static int changed;
 void
 chkmail(void)
 {
+	#if 1
+	printf("mail.c chkmail CALLED!\n");
+	#elif
 	const char *mpath;
 	char *p;
 	char *q;
@@ -105,6 +108,7 @@ chkmail(void)
 	}
 	changed = 0;
 	popstackmark(&smark);
+	#endif
 }
 
 
