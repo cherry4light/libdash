@@ -74,7 +74,6 @@ void getcmdentry(char *, struct cmdentry *);
 #endif
 void defun(union node *);
 void unsetfunc(const char *);
-int commandcmd(int, char **);
 
 static inline int padvance(const char **path, const char *name)
 {

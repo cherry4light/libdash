@@ -48,7 +48,3 @@
 #ifndef JOBS
 #define JOBS 1
 #endif
-
-commandcmd	-u command
-evalcmd		-ns eval
-execcmd		-s exec
