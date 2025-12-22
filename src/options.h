@@ -79,8 +79,5 @@ int procargs(int, char **);
 void optschanged(void);
 void setparam(char **);
 void freeparam(volatile struct shparam *);
-int shiftcmd(int, char **);
-int setcmd(int, char **);
-int getoptscmd(int, char **);
 int nextopt(const char *);
 void getoptsreset(const char *);

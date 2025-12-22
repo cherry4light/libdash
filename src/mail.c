@@ -38,6 +38,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "shell.h"
 #include "nodes.h"
@@ -49,67 +50,8 @@
 #include "mail.h"
 #include "mystring.h"
 
-
-#define MAXMBOXES 10
-
-/* times of mailboxes */
-static time_t mailtime[MAXMBOXES];
 /* Set if MAIL or MAILPATH is changed. */
 static int changed;
-
-
-
-/*
- * Print appropriate message(s) if mail has arrived.  If changed is set,
- * then the value of MAIL has changed, so we just update the values.
- */
-
-void
-chkmail(void)
-{
-	#if 1
-	printf("mail.c chkmail CALLED!\n");
-	#elif
-	const char *mpath;
-	char *p;
-	char *q;
-	time_t *mtp;
-	struct stackmark smark;
-	struct stat64 statb;
-
-	setstackmark(&smark);
-	mpath = mpathset() ? mpathval() : mailval();
-	for (mtp = mailtime; mtp < mailtime + MAXMBOXES; mtp++) {
-		int len;
-
-		len = padvance_magic(&mpath, nullstr, 2);
-		if (!len)
-			break;
-		p = stackblock();
-		if (*p == '\0')
-			continue;
-		for (q = p ; *q ; q++);
-#ifdef DEBUG
-		if (q[-1] != '/')
-			abort();
-#endif
-		q[-1] = '\0';			/* delete trailing '/' */
-		if (stat64(p, &statb) < 0) {
-			*mtp = 0;
-			continue;
-		}
-		if (!changed && statb.st_mtime != *mtp) {
-			outfmt(
-				&errout, snlfmt,
-				pathopt ? pathopt : "you have mail"
-			);
-		}
-		*mtp = statb.st_mtime;
-	}
-	changed = 0;
-	popstackmark(&smark);
-	#endif
-}
 
 
 void

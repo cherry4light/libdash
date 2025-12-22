@@ -73,8 +73,6 @@ extern int etext();
 #endif
 MKINIT struct jmploc main_handler;
 
-STATIC void read_profile(const char *);
-STATIC char *find_dot_file(char *);
 static int cmdloop(int);
 
 //libdash
@@ -102,103 +100,7 @@ int main(int, char **);
 int
 main(int argc, char **argv)
 {
-	char *shinit;
-	volatile int state;
-	struct stackmark smark;
-	int login;
-
-#ifdef __GLIBC__
-	dash_errno = __errno_location();
-#endif
-
-#if PROFILE
-	monitor(4, etext, profile_buf, sizeof profile_buf, 50);
-#endif
-	state = 0;
-	if (unlikely(setjmp(main_handler.loc))) {
-		int e;
-		int s;
-
-		exitreset();
-
-		e = exception;
-
-		s = state;
-		if (e == EXEND || e == EXEXIT || s == 0 || iflag == 0 || shlvl)
-			exitshell();
-
-		reset();
-
-		if (e == EXINT
-#if ATTY
-		 && (! attyset() || equal(termval(), "emacs"))
-#endif
-		 ) {
-			out2c('\n');
-#ifdef FLUSHERR
-			flushout(out2);
-#endif
-		}
-		popstackmark(&smark);
-		FORCEINTON;				/* enable interrupts */
-		if (s == 1)
-			goto state1;
-		else if (s == 2)
-			goto state2;
-		else if (s == 3)
-			goto state3;
-		else
-			goto state4;
-	}
-	handler = &main_handler;
-#ifdef DEBUG
-	opentrace();
-	trputs("Shell args:  ");  trargs(argv);
-#endif
-	rootpid = getpid();
-	init();
-	setstackmark(&smark);
-	login = procargs(argc, argv);
-	if (login) {
-		state = 1;
-		read_profile("/etc/profile");
-state1:
-		state = 2;
-		read_profile("$HOME/.profile");
-	}
-state2:
-	state = 3;
-	if (
-#ifndef linux
-		getuid() == geteuid() && getgid() == getegid() &&
-#endif
-		iflag
-	) {
-		if ((shinit = lookupvar("ENV")) != NULL && *shinit != '\0') {
-			read_profile(shinit);
-		}
-	}
-	popstackmark(&smark);
-state3:
-	state = 4;
-	if (minusc)
-		evalstring(minusc, sflag ? 0 : EV_EXIT);
-
-	if (sflag || minusc == NULL) {
-state4:	/* XXX ??? - why isn't this before the "if" statement */
-		cmdloop(1);
-	}
-#if PROFILE
-	monitor(0);
-#endif
-#if GPROF
-	{
-		extern void _mcleanup(void);
-		_mcleanup();
-	}
-#endif
-	exitshell();
-	/* NOTREACHED */
+	return 1;
 }
 
 #endif // MAIN // libdash
@@ -227,7 +129,6 @@ cmdloop(int top)
 		inter = 0;
 		if (iflag && top) {
 			inter++;
-			chkmail();
 		}
 		n = parsecmd(inter);
 		/* showtree(n); DEBUG */
@@ -269,24 +170,6 @@ cmdloop(int top)
 }
 
 
-
-/*
- * Read /etc/profile or .profile.  Return on error.
- */
-
-STATIC void
-read_profile(const char *name)
-{
-	name = expandstr(name);
-	if (setinputfile(name, INPUT_PUSH_FILE | INPUT_NOFILE_OK) < 0)
-		return;
-
-	cmdloop(0);
-	popfile();
-}
-
-
-
 /*
  * Read a file containing shell functions.
  */
@@ -297,75 +180,6 @@ readcmdfile(char *name)
 	setinputfile(name, INPUT_PUSH_FILE);
 	cmdloop(0);
 	popfile();
-}
-
-
-
-/*
- * Take commands from a file.  To be compatible we should do a path
- * search for the file, which is necessary to find sub-commands.
- */
-
-
-STATIC char *
-find_dot_file(char *basename)
-{
-	char *fullname;
-	const char *path = pathval();
-	struct stat64 statb;
-	int len;
-
-	/* don't try this for absolute or relative paths */
-	if (strchr(basename, '/'))
-		return basename;
-
-	while ((len = padvance(&path, basename)) >= 0) {
-		fullname = stackblock();
-		if ((!pathopt || *pathopt == 'f') &&
-		    !stat64(fullname, &statb) && S_ISREG(statb.st_mode)) {
-			/* This will be freed by the caller. */
-			return stalloc(len);
-		}
-	}
-
-	/* not found in the PATH */
-	sh_error("%s: not found", basename);
-	/* NOTREACHED */
-}
-
-int
-dotcmd(int argc, char **argv)
-{
-	int status = 0;
-
-	nextopt(nullstr);
-	argv = argptr;
-
-	if (*argv) {
-		char *fullname;
-
-		fullname = find_dot_file(*argv);
-		setinputfile(fullname, INPUT_PUSH_FILE);
-		commandname = fullname;
-		status = cmdloop(0);
-		popfile();
-	}
-
-	return status;
-}
-
-
-int
-exitcmd(int argc, char **argv)
-{
-	if (stoppedjobs())
-		return 0;
-
-	if (argc > 1)
-		savestatus = number(argv[1]);
-
-	exraise(EXEXIT);
-	/* NOTREACHED */
 }
 
 #ifdef mkinit

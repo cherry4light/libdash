@@ -179,65 +179,6 @@ static const struct t_op *getop(const char *s)
 	return NULL;
 }
 
-int
-testcmd(int argc, char **argv)
-{
-	const struct t_op *op;
-	enum token n;
-	int res = 1;
-
-	if (*argv[0] == '[') {
-		if (*argv[--argc] != ']')
-			error("missing ]");
-		argv[argc] = NULL;
-	}
-
-	t_wp_op = NULL;
-
-recheck:
-	argv++;
-	argc--;
-
-	if (argc < 1)
-		return res;
-
-	/*
-	 * POSIX prescriptions: he who wrote this deserves the Nobel
-	 * peace prize.
-	 */
-	switch (argc) {
-	case 3:
-		op = getop(argv[1]);
-		if (op && op->op_type == BINOP) {
-			n = OPERAND;
-			goto eval;
-		}
-		/* fall through */
-
-	case 4:
-		if (!strcmp(argv[0], "(") && !strcmp(argv[argc - 1], ")")) {
-			argv[--argc] = NULL;
-			argv++;
-			argc--;
-		} else if (!strcmp(argv[0], "!")) {
-			res = 0;
-			goto recheck;
-		}
-	}
-
-	n = t_lex(argv);
-
-eval:
-	t_wp = argv;
-	res ^= oexpr(n);
-	argv = t_wp;
-
-	if (argv[0] != NULL && argv[1] != NULL)
-		syntax(argv[0], "unexpected operator");
-
-	return res;
-}
-
 static void
 syntax(const char *op, const char *msg)
 {

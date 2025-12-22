@@ -128,62 +128,6 @@ lookupalias(const char *name, int check)
 }
 
 /*
- * TODO - sort output
- */
-int
-aliascmd(int argc, char **argv)
-{
-	char *n, *v;
-	int ret = 0;
-	struct alias *ap;
-
-	if (argc == 1) {
-		int i;
-
-		for (i = 0; i < ATABSIZE; i++)
-			for (ap = atab[i]; ap; ap = ap->next) {
-				printalias(ap);
-			}
-		return (0);
-	}
-	while ((n = *++argv) != NULL) {
-		if ((v = strchr(n+1, '=')) == NULL) { /* n+1: funny ksh stuff */
-			if ((ap = *__lookupalias(n)) == NULL) {
-				outfmt(out2, "%s: %s not found\n", "alias", n);
-				ret = 1;
-			} else
-				printalias(ap);
-		} else {
-			*v++ = '\0';
-			setalias(n, v);
-		}
-	}
-
-	return (ret);
-}
-
-int
-unaliascmd(int argc, char **argv)
-{
-	int i;
-
-	while ((i = nextopt("a")) != '\0') {
-		if (i == 'a') {
-			rmaliases();
-			return (0);
-		}
-	}
-	for (i = 0; *argptr; argptr++) {
-		if (unalias(*argptr)) {
-			outfmt(out2, "%s: %s not found\n", "unalias", *argptr);
-			i = 1;
-		}
-	}
-
-	return (i);
-}
-
-/*
 STATIC struct alias *
 */ // libdash
 struct alias *

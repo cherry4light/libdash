@@ -144,12 +144,9 @@ intmax_t lookupvarint(const char *);
 char **listvars(int, int, char ***);
 #define environment() listvars(VEXPORT, VUNSET, 0)
 int showvars(const char *, int, int);
-int exportcmd(int, char **);
-int localcmd(int, char **);
 void mklocal(char *name, int flags);
 struct localvar_list *pushlocalvars(int push);
 void unwindlocalvars(struct localvar_list *stop);
-int unsetcmd(int, char **);
 void unsetvar(const char *);
 int varcmp(const char *, const char *);
 

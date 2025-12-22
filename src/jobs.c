@@ -107,7 +107,6 @@ STATIC void set_curjob(struct job *, unsigned);
 STATIC int jobno(const struct job *);
 STATIC int sprint_status(char *, int, int);
 STATIC void freejob(struct job *);
-STATIC struct job *getjob(const char *, int);
 STATIC struct job *growjobtab(void);
 STATIC void forkchild(struct job *, union node *, int);
 STATIC void forkparent(struct job *, union node *, int, pid_t);
@@ -124,7 +123,6 @@ STATIC void showpipe(struct job *, struct output *);
 STATIC int getstatus(struct job *);
 
 #if JOBS
-static int restartjob(struct job *, int);
 static void xtcsetpgrp(int, pid_t);
 #endif
 
@@ -243,101 +241,6 @@ close:
 #endif
 
 
-int
-killcmd(argc, argv)
-	int argc;
-	char **argv;
-{
-	extern char *signal_names[];
-	int signo = -1;
-	int list = 0;
-	int i;
-	pid_t pid;
-	struct job *jp;
-
-	if (argc <= 1) {
-usage:
-		sh_error(
-"Usage: kill [-s sigspec | -signum | -sigspec] [pid | job]... or\n"
-"kill -l [exitstatus]"
-		);
-	}
-
-	if (**++argv == '-') {
-		signo = decode_signal(*argv + 1, 1);
-		if (signo < 0) {
-			int c;
-
-			while ((c = nextopt("ls:")) != '\0')
-				switch (c) {
-				default:
-#ifdef DEBUG
-					abort();
-#endif
-				case 'l':
-					list = 1;
-					break;
-				case 's':
-					signo = decode_signal(optionarg, 1);
-					if (signo < 0) {
-						sh_error(
-							"invalid signal number or name: %s",
-							optionarg
-						);
-					}
-		                        break;
-				}
-			argv = argptr;
-		} else
-			argv++;
-	}
-
-	if (!list && signo < 0)
-		signo = SIGTERM;
-
-	if ((signo < 0 || !*argv) ^ list) {
-		goto usage;
-	}
-
-	if (list) {
-		struct output *out;
-
-		out = out1;
-		if (!*argv) {
-			outstr("0\n", out);
-			for (i = 1; i < NSIG; i++) {
-				outfmt(out, snlfmt, signal_names[i]);
-			}
-			return 0;
-		}
-		signo = number(*argv);
-		if (signo > 128)
-			signo -= 128;
-		if (0 < signo && signo < NSIG)
-			outfmt(out, snlfmt, signal_names[signo]);
-		else
-			sh_error("invalid signal number or exit status: %s",
-				 *argv);
-		return 0;
-	}
-
-	i = 0;
-	do {
-		if (**argv == '%') {
-			jp = getjob(*argv, 0);
-			pid = -jp->ps[0].pid;
-		} else
-			pid = **argv == '-' ?
-				-number(*argv + 1) : number(*argv);
-		if (kill(pid, signo) != 0) {
-			sh_warnx("%s\n", strerror(errno));
-			i = 1;
-		}
-	} while (*++argv);
-
-	return i;
-}
-
 STATIC int
 jobno(const struct job *jp)
 {
@@ -345,69 +248,7 @@ jobno(const struct job *jp)
 }
 
 #if JOBS
-int
-fgcmd(int argc, char **argv)
-{
-	struct job *jp;
-	struct output *out;
-	int mode;
-	int retval;
 
-	mode = (**argv == 'f') ? FORK_FG : FORK_BG;
-	nextopt(nullstr);
-	argv = argptr;
-	out = out1;
-	do {
-		jp = getjob(*argv, 1);
-		if (mode == FORK_BG) {
-			set_curjob(jp, CUR_RUNNING);
-			outfmt(out, "[%d] ", jobno(jp));
-		}
-		outstr(jp->ps->cmd, out);
-		showpipe(jp, out);
-		retval = restartjob(jp, mode);
-	} while (*argv && *++argv);
-	return retval;
-}
-
-int bgcmd(int argc, char **argv)
-#ifdef HAVE_ALIAS_ATTRIBUTE
-	__attribute__((__alias__("fgcmd")));
-#else
-{
-	return fgcmd(argc, argv);
-}
-#endif
-
-
-STATIC int
-restartjob(struct job *jp, int mode)
-{
-	struct procstat *ps;
-	int i;
-	int status;
-	pid_t pgid;
-
-	INTOFF;
-	if (jp->state == JOBDONE)
-		goto out;
-	jp->state = JOBRUNNING;
-	pgid = jp->ps->pid;
-	if (mode == FORK_FG)
-		xtcsetpgrp(ttyfd, pgid);
-	killpg(pgid, SIGCONT);
-	ps = jp->ps;
-	i = jp->nprocs;
-	do {
-		if (WIFSTOPPED(ps->status)) {
-			ps->status = -1;
-		}
-	} while (ps++, --i);
-out:
-	status = (mode == FORK_FG) ? waitforjob(jp) : 0;
-	INTON;
-	return status;
-}
 #endif
 
 STATIC int
@@ -519,33 +360,6 @@ start:
 	}
 }
 
-
-int
-jobscmd(int argc, char **argv)
-{
-	int mode, m;
-	struct output *out;
-
-	mode = 0;
-	while ((m = nextopt("lp")))
-		if (m == 'l')
-			mode = SHOW_PID;
-		else
-			mode = SHOW_PGID;
-
-	out = out1;
-	argv = argptr;
-	if (*argv)
-		do
-			showjob(out, getjob(*argv,0), mode);
-		while (*++argv);
-	else
-		showjobs(out, mode);
-
-	return 0;
-}
-
-
 /*
  * Print a list of jobs.  If "change" is nonzero, only print jobs whose
  * statuses have changed since the last call to showjobs.
@@ -588,159 +402,6 @@ freejob(struct job *jp)
 	set_curjob(jp, CUR_DELETE);
 	INTON;
 }
-
-
-
-int
-waitcmd(int argc, char **argv)
-{
-	struct job *job;
-	int retval;
-	struct job *jp;
-
-	nextopt(nullstr);
-	retval = 0;
-
-	argv = argptr;
-	if (!*argv) {
-		/* wait for all jobs */
-		for (;;) {
-			jp = curjob;
-			while (1) {
-				if (!jp) {
-					/* no running procs */
-					goto out;
-				}
-				if (jp->state == JOBRUNNING)
-					break;
-				jp->waited = 1;
-				jp = jp->prev_job;
-			}
-			if (!dowait(DOWAIT_WAITCMD_ALL, 0))
-				goto sigout;
-		}
-	}
-
-	retval = 127;
-	do {
-		if (**argv != '%') {
-			pid_t pid = number(*argv);
-			job = curjob;
-			goto start;
-			do {
-				if (job->ps[job->nprocs - 1].pid == pid)
-					break;
-				job = job->prev_job;
-start:
-				if (!job)
-					goto repeat;
-			} while (1);
-		} else
-			job = getjob(*argv, 0);
-		/* loop until process terminated or stopped */
-		if (!dowait(DOWAIT_WAITCMD, job))
-			goto sigout;
-		job->waited = 1;
-		retval = getstatus(job);
-repeat:
-		;
-	} while (*++argv);
-
-out:
-	return retval;
-
-sigout:
-	retval = 128 + pending_sig;
-	goto out;
-}
-
-
-
-/*
- * Convert a job name to a job structure.
- */
-
-STATIC struct job *
-getjob(const char *name, int getctl)
-{
-	struct job *jp;
-	struct job *found;
-	const char *err_msg = "No such job: %s";
-	unsigned num;
-	int c;
-	const char *p;
-	char *(*match)(const char *, const char *);
-
-	jp = curjob;
-	p = name;
-	if (!p)
-		goto currentjob;
-
-	if (*p != '%')
-		goto err;
-
-	c = *++p;
-	if (!c)
-		goto currentjob;
-
-	if (!p[1]) {
-		if (c == '+' || c == '%') {
-currentjob:
-			err_msg = "No current job";
-			goto check;
-		} else if (c == '-') {
-			if (jp)
-				jp = jp->prev_job;
-			err_msg = "No previous job";
-check:
-			if (!jp)
-				goto err;
-			goto gotit;
-		}
-	}
-
-	if (is_number(p)) {
-		num = atoi(p);
-		if (num > 0 && num <= njobs) {
-			jp = jobtab + num - 1;
-			if (jp->used)
-				goto gotit;
-			goto err;
-		}
-	}
-
-	match = prefix;
-	if (*p == '?') {
-		match = strstr;
-		p++;
-	}
-
-	found = 0;
-	while (jp) {
-		if (match(jp->ps[0].cmd, p)) {
-			if (found)
-				goto err;
-			found = jp;
-			err_msg = "%s: ambiguous";
-		}
-		jp = jp->prev_job;
-	}
-
-	if (!found)
-		goto err;
-	jp = found;
-
-gotit:
-#if JOBS
-	err_msg = "job %s not created under job control";
-	if (getctl && jp->jobctl == 0)
-		goto err;
-#endif
-	return jp;
-err:
-	sh_error(err_msg, name);
-}
-
 
 
 /*

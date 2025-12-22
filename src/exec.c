@@ -91,7 +91,6 @@ STATIC int builtinloc = -1;		/* index in path of %builtin, or -1 */
 
 
 STATIC void tryexec(char *, char **, char **);
-STATIC void printentry(struct tblentry *);
 STATIC void clearcmdentry(void);
 STATIC struct tblentry *cmdlookup(const char *, int);
 STATIC void delete_cmd_entry(void);
@@ -257,69 +256,6 @@ int padvance_magic(const char **path, const char *name, int magic)
 
 	return qlen;
 }
-
-
-
-/*** Command hashing code ***/
-
-
-int
-hashcmd(int argc, char **argv)
-{
-	struct tblentry **pp;
-	struct tblentry *cmdp;
-	int c;
-	struct cmdentry entry;
-	char *name;
-
-	while ((c = nextopt("r")) != '\0') {
-		clearcmdentry();
-		return 0;
-	}
-	if (*argptr == NULL) {
-		for (pp = cmdtable ; pp < &cmdtable[CMDTABLESIZE] ; pp++) {
-			for (cmdp = *pp ; cmdp ; cmdp = cmdp->next) {
-				if (cmdp->cmdtype == CMDNORMAL)
-					printentry(cmdp);
-			}
-		}
-		return 0;
-	}
-	c = 0;
-	while ((name = *argptr) != NULL) {
-		if ((cmdp = cmdlookup(name, 0)) &&
-		    (cmdp->cmdtype == CMDNORMAL ||
-		     (cmdp->cmdtype == CMDBUILTIN &&
-		      !(cmdp->param.cmd->flags & BUILTIN_REGULAR) &&
-		      builtinloc > 0)))
-			delete_cmd_entry();
-		find_command(name, &entry, DO_ERR, pathval());
-		if (entry.cmdtype == CMDUNKNOWN)
-			c = 1;
-		argptr++;
-	}
-	return c;
-}
-
-
-STATIC void
-printentry(struct tblentry *cmdp)
-{
-	int idx;
-	const char *path;
-	char *name;
-
-	idx = cmdp->param.index;
-	path = pathval();
-	do {
-		padvance(&path, cmdp->cmdname);
-	} while (--idx >= 0);
-	name = stackblock();
-	out1str(name);
-	out1fmt(snlfmt, cmdp->rehash ? "*" : nullstr);
-}
-
-
 
 /*
  * Resolve a command name.  If you change this routine, you may have to
@@ -751,22 +687,6 @@ unsetfunc(const char *name)
 	if ((cmdp = cmdlookup(name, 0)) != NULL &&
 	    cmdp->cmdtype == CMDFUNCTION)
 		delete_cmd_entry();
-}
-
-/*
- * Locate and print what a word is...
- */
-
-int
-typecmd(int argc, char **argv)
-{
-	int i;
-	int err = 0;
-
-	for (i = 1; i < argc; i++) {
-		err |= describe_command(out1, argv[i], NULL, 1);
-	}
-	return err;
 }
 
 STATIC int

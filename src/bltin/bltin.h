@@ -83,7 +83,5 @@
 #define INITARGS(argv)	if ((commandname = argv[0]) == NULL) {fputs("Argc is zero\n", stderr); exit(2);} else
 #endif
 
-int echocmd(int, char **);
-
 
 extern const char *commandname;

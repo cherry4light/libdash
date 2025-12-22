@@ -397,61 +397,6 @@ showvars(const char *prefix, int on, int off)
 }
 
 
-
-/*
- * The export and readonly commands.
- */
-
-int
-exportcmd(int argc, char **argv)
-{
-	struct var *vp;
-	char *name;
-	const char *p;
-	char **aptr;
-	int flag = argv[0][0] == 'r'? VREADONLY : VEXPORT;
-	int notp;
-
-	notp = nextopt("p") - 'p';
-	if (notp && ((name = *(aptr = argptr)))) {
-		do {
-			if ((p = strchr(name, '=')) != NULL) {
-				p++;
-			} else {
-				if ((vp = *findvar(hashvar(name), name))) {
-					vp->flags |= flag;
-					continue;
-				}
-			}
-			setvar(name, p, flag);
-		} while ((name = *++aptr) != NULL);
-	} else {
-		showvars(argv[0], flag, 0);
-	}
-	return 0;
-}
-
-
-/*
- * The "local" command.
- */
-
-int
-localcmd(int argc, char **argv)
-{
-	char *name;
-
-	if (!localvar_stack)
-		sh_error("not in a function");
-
-	argv = argptr;
-	while ((name = *argv++) != NULL) {
-		mklocal(name, 0);
-	}
-	return 0;
-}
-
-
 /*
  * Make a variable a local variable.  When a variable is made local, it's
  * value and flags are saved in a localvar structure.  The saved values
@@ -572,36 +517,6 @@ void unwindlocalvars(struct localvar_list *stop)
 	while (localvar_stack != stop)
 		poplocalvars();
 }
-
-
-/*
- * The unset builtin command.  We unset the function before we unset the
- * variable to allow a function to be unset when there is a readonly variable
- * with the same name.
- */
-
-int
-unsetcmd(int argc, char **argv)
-{
-	char **ap;
-	int i;
-	int flag = 0;
-
-	while ((i = nextopt("vf")) != '\0') {
-		flag = i;
-	}
-
-	for (ap = argptr; *ap ; ap++) {
-		if (flag != 'f') {
-			unsetvar(*ap);
-			continue;
-		}
-		if (flag != 'v')
-			unsetfunc(*ap);
-	}
-	return 0;
-}
-
 
 /*
  * Unset the specified variable.

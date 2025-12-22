@@ -95,13 +95,8 @@ extern int jobctl;		/* true if doing job control */
 extern int vforked;		/* Set if we are in the vforked child */
 
 void setjobctl(int);
-int killcmd(int, char **);
-int fgcmd(int, char **);
-int bgcmd(int, char **);
-int jobscmd(int, char **);
 struct output;
 void showjobs(struct output *, int);
-int waitcmd(int, char **);
 struct job *makejob(union node *, int);
 int forkshell(struct job *, union node *, int);
 struct job *vforkexec(union node *n, char **argv, const char *path, int idx);

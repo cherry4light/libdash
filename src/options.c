@@ -109,7 +109,6 @@ char optlist[NOPTS];
 static int options(int);
 STATIC void minus_o(char *, int);
 STATIC void setoption(int, int);
-STATIC int getopts(char *, char *, char **);
 
 
 /*
@@ -337,181 +336,12 @@ freeparam(volatile struct shparam *param)
 }
 
 
-
-/*
- * The shift builtin command.
- */
-
-int
-shiftcmd(int argc, char **argv)
-{
-	int n;
-	char **ap1, **ap2;
-
-	n = 1;
-	if (argc > 1)
-		n = number(argv[1]);
-	if (n > shellparam.nparam)
-		sh_error("can't shift that many");
-	INTOFF;
-	shellparam.nparam -= n;
-	for (ap1 = shellparam.p ; --n >= 0 ; ap1++) {
-		if (shellparam.malloc)
-			ckfree(*ap1);
-	}
-	ap2 = shellparam.p;
-	while ((*ap2++ = *ap1++) != NULL);
-	shellparam.optind = 1;
-	shellparam.optoff = -1;
-	INTON;
-	return 0;
-}
-
-
-
-/*
- * The set command builtin.
- */
-
-int
-setcmd(int argc, char **argv)
-{
-	if (argc == 1)
-		return showvars(nullstr, 0, VUNSET);
-	INTOFF;
-	options(0);
-	optschanged();
-	if (*argptr != NULL) {
-		setparam(argptr);
-	}
-	INTON;
-	return 0;
-}
-
-
 void
 getoptsreset(value)
 	const char *value;
 {
 	shellparam.optind = number(value) ?: 1;
 	shellparam.optoff = -1;
-}
-
-/*
- * The getopts builtin.  Shellparam.optnext points to the next argument
- * to be processed.  Shellparam.optptr points to the next character to
- * be processed in the current argument.  If shellparam.optnext is NULL,
- * then it's the first time getopts has been called.
- */
-
-int
-getoptscmd(int argc, char **argv)
-{
-	char **optbase;
-
-	if (argc < 3)
-		sh_error("Usage: getopts optstring var [arg]");
-	else if (argc == 3) {
-		optbase = shellparam.p;
-		if ((unsigned)shellparam.optind > shellparam.nparam + 1) {
-			shellparam.optind = 1;
-			shellparam.optoff = -1;
-		}
-	}
-	else {
-		optbase = &argv[3];
-		if ((unsigned)shellparam.optind > argc - 2) {
-			shellparam.optind = 1;
-			shellparam.optoff = -1;
-		}
-	}
-
-	return getopts(argv[1], argv[2], optbase);
-}
-
-STATIC int
-getopts(char *optstr, char *optvar, char **optfirst)
-{
-	char *p, *q;
-	char c = '?';
-	int done = 0;
-	char s[2];
-	char **optnext;
-	int ind = shellparam.optind;
-	int off = shellparam.optoff;
-
-	shellparam.optind = -1;
-	optnext = optfirst + ind - 1;
-
-	if (ind <= 1 || off < 0 || strlen(optnext[-1]) < off)
-		p = NULL;
-	else
-		p = optnext[-1] + off;
-	if (p == NULL || *p == '\0') {
-		/* Current word is done, advance */
-		p = *optnext;
-		if (p == NULL || *p != '-' || *++p == '\0') {
-atend:
-			p = NULL;
-			done = 1;
-			goto out;
-		}
-		optnext++;
-		if (p[0] == '-' && p[1] == '\0')	/* check for "--" */
-			goto atend;
-	}
-
-	c = *p++;
-	for (q = optstr; *q != c; ) {
-		if (*q == '\0') {
-			if (optstr[0] == ':') {
-				s[0] = c;
-				s[1] = '\0';
-				setvar("OPTARG", s, 0);
-			} else {
-				outfmt(&errout, "Illegal option -%c\n", c);
-				(void) unsetvar("OPTARG");
-			}
-			c = '?';
-			goto out;
-		}
-		if (*++q == ':')
-			q++;
-	}
-
-	if (*++q == ':') {
-		if (*p == '\0' && (p = *optnext) == NULL) {
-			if (optstr[0] == ':') {
-				s[0] = c;
-				s[1] = '\0';
-				setvar("OPTARG", s, 0);
-				c = ':';
-			} else {
-				outfmt(&errout, "No arg for -%c option\n", c);
-				(void) unsetvar("OPTARG");
-				c = '?';
-			}
-			goto out;
-		}
-
-		if (p == *optnext)
-			optnext++;
-		setvar("OPTARG", p, 0);
-		p = NULL;
-	} else
-		setvar("OPTARG", nullstr, 0);
-
-out:
-	ind = optnext - optfirst + 1;
-	setvarint("OPTIND", ind, VNOFUNC);
-	s[0] = c;
-	s[1] = '\0';
-	setvar(optvar, s, 0);
-
-	shellparam.optoff = p ? p - *(optnext - 1) : -1;
-	shellparam.optind = ind;
-
-	return done;
 }
 
 /*
