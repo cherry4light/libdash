@@ -38,6 +38,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "shell.h"
 #include "nodes.h"
