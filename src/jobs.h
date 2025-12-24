@@ -42,12 +42,6 @@
 #define FORK_BG 1
 #define FORK_NOJOB 2
 
-/* mode flags for showjob(s) */
-#define	SHOW_PGID	0x01	/* only show pgid - for jobs -p */
-#define	SHOW_PID	0x04	/* include process pid */
-#define	SHOW_CHANGED	0x08	/* only jobs whose state has changed */
-
-
 /*
  * A job structure contains information about a job.  A job is either a
  * single process or a set of processes contained in a pipeline.  In the
@@ -96,7 +90,6 @@ extern int vforked;		/* Set if we are in the vforked child */
 
 void setjobctl(int);
 struct output;
-void showjobs(struct output *, int);
 struct job *makejob(union node *, int);
 int forkshell(struct job *, union node *, int);
 int waitforjob(struct job *);

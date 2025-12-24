@@ -80,15 +80,6 @@ MKINIT struct redirtab *redirlist;
 /* Bit map of currently closed file descriptors. */
 static unsigned closed_redirs;
 
-STATIC int openredirect(union node *);
-#ifdef notyet
-STATIC void dupredirect(union node *, int, char[10]);
-#else
-STATIC void dupredirect(union node *, int);
-#endif
-STATIC int openhere(union node *);
-
-
 static unsigned update_closed_redirs(int fd, int nfd)
 {
 	unsigned val = closed_redirs;
@@ -101,85 +92,6 @@ static unsigned update_closed_redirs(int fd, int nfd)
 
 	return val & bit;
 }
-
-
-/*
- * Process a list of redirection commands.  If the REDIR_PUSH flag is set,
- * old file descriptors are stashed away so that the redirection can be
- * undone by calling popredir.  If the REDIR_BACKQ flag is set, then the
- * standard output, and the standard error if it becomes a duplicate of
- * stdout, is saved in memory.
- */
-
-void
-redirect(union node *redir, int flags)
-{
-        union node *n;
-        struct redirtab *sv;
-        int i;
-        int fd;
-        int newfd;
-        int *p;
-#if notyet
-        char memory[10];	/* file descriptors to write to memory */
-
-        for (i = 10 ; --i >= 0 ; )
-                memory[i] = 0;
-        memory[1] = flags & REDIR_BACKQ;
-#endif
-	if (!redir)
-		return;
-	sv = NULL;
-	INTOFF;
-	if (likely(flags & REDIR_PUSH))
-		sv = redirlist;
-	n = redir;
-	do {
-		newfd = openredirect(n);
-		if (newfd < -1)
-			continue;
-
-		fd = n->nfile.fd;
-
-		if (sv) {
-			int closed;
-
-			p = &sv->renamed[fd];
-			i = *p;
-
-			closed = update_closed_redirs(fd, newfd);
-
-			if (likely(i == EMPTY)) {
-				i = CLOSED;
-				if (fd != newfd && !closed) {
-					i = savefd(fd, fd);
-					fd = -1;
-				}
-			}
-
-			*p = i;
-		}
-
-		if (fd == newfd)
-			continue;
-
-#ifdef notyet
-                dupredirect(n, newfd, memory);
-#else
-                dupredirect(n, newfd);
-#endif
-        } while ((n = n->nfile.next));
-        INTON;
-#ifdef notyet
-        if (memory[1])
-                out1 = &memout;
-        if (memory[2])
-                out2 = &memout;
-#endif
-        if (flags & REDIR_SAVEFD2 && sv->renamed[2] >= 0)
-                preverrout.fd = sv->renamed[2];
-}
-
 
 static int sh_open_fail(const char *, int, int) __attribute__((__noreturn__));
 static int sh_open_fail(const char *pathname, int flags, int e)
@@ -213,166 +125,6 @@ int sh_open(const char *pathname, int flags, int mayfail)
 
 	sh_open_fail(pathname, flags, e);
 }
-
-
-STATIC int
-openredirect(union node *redir)
-{
-	struct stat64 sb;
-	char *fname;
-	int flags;
-	int f;
-
-	switch (redir->nfile.type) {
-	case NFROM:
-		flags = O_RDONLY;
-do_open:
-		f = sh_open(redir->nfile.expfname, flags, 0);
-		break;
-	case NFROMTO:
-		flags = O_RDWR|O_CREAT;
-		goto do_open;
-	case NTO:
-		/* Take care of noclobber mode. */
-		if (Cflag) {
-			fname = redir->nfile.expfname;
-			if (stat64(fname, &sb) < 0) {
-				flags = O_WRONLY|O_CREAT|O_EXCL;
-				goto do_open;
-			}
-
-			if (S_ISREG(sb.st_mode))
-				goto ecreate;
-
-			f = sh_open(fname, O_WRONLY, 0);
-			if (!fstat64(f, &sb) && S_ISREG(sb.st_mode)) {
-				close(f);
-				goto ecreate;
-			}
-			break;
-		}
-		/* FALLTHROUGH */
-	case NCLOBBER:
-		flags = O_WRONLY|O_CREAT|O_TRUNC;
-		goto do_open;
-	case NAPPEND:
-		flags = O_WRONLY|O_CREAT|O_APPEND;
-		goto do_open;
-	case NTOFD:
-	case NFROMFD:
-		f = redir->ndup.dupfd;
-		if (f == redir->nfile.fd)
-			f = -2;
-		break;
-	default:
-#ifdef DEBUG
-                abort();
-#endif
-                /* Fall through to eliminate warning. */
-        case NHERE:
-        case NXHERE:
-                f = openhere(redir);
-                break;
-        }
-
-        return f;
-ecreate:
-	sh_open_fail(fname, O_CREAT, EEXIST);
-}
-
-
-STATIC void
-#ifdef notyet
-dupredirect(redir, f, memory)
-#else
-dupredirect(redir, f)
-#endif
-        union node *redir;
-        int f;
-#ifdef notyet
-        char memory[10];
-#endif
-        {
-        int fd = redir->nfile.fd;
-        int err = 0;
-
-#ifdef notyet
-        memory[fd] = 0;
-#endif
-        if (redir->nfile.type == NTOFD || redir->nfile.type == NFROMFD) {
-                /* if not ">&-" */
-                if (f >= 0) {
-#ifdef notyet
-                        if (memory[f])
-                                memory[fd] = 1;
-                        else
-#endif
-                                if (dup2(f, fd) < 0) {
-                                        err = errno;
-                                        goto err;
-                                }
-                        return;
-                }
-                f = fd;
-        } else if (dup2(f, fd) < 0)
-                err = errno;
-
-        close(f);
-        if (err < 0)
-                goto err;
-
-        return;
-
-err:
-        sh_error("%d: %s", f, strerror(err));
-}
-
-
-/*
- * Handle here documents.  Normally we fork off a process to write the
- * data to a pipe.  If the document is short, we can stuff the data in
- * the pipe without forking.
- */
-
-STATIC int
-openhere(union node *redir)
-{
-        char *p;
-        int pip[2];
-        size_t len = 0;
-
-        if (pipe(pip) < 0)
-                sh_error("Pipe call failed");
-
-        p = redir->nhere.doc->narg.text;
-        if (redir->type == NXHERE) {
-                expandarg(redir->nhere.doc, NULL, EXP_QUOTED);
-                p = stackblock();
-        }
-
-        len = strlen(p);
-        if (len <= PIPESIZE) {
-                xwrite(pip[1], p, len);
-                goto out;
-        }
-
-        if (forkshell((struct job *)NULL, (union node *)NULL, FORK_NOJOB) == 0) {
-                close(pip[0]);
-                signal(SIGINT, SIG_IGN);
-                signal(SIGQUIT, SIG_IGN);
-                signal(SIGHUP, SIG_IGN);
-#ifdef SIGTSTP
-                signal(SIGTSTP, SIG_IGN);
-#endif
-                signal(SIGPIPE, SIG_DFL);
-                xwrite(pip[1], p, len);
-                _exit(0);
-        }
-out:
-        close(pip[1]);
-        return pip[0];
-}
-
 
 
 /*
@@ -433,28 +185,6 @@ FORKRESET {
 
 #endif
 
-/* 
- * Just a convenience because fcntl isn't well exposed in OCaml.
- */
-// libdash
-int
-freshfd_ge10(int fd)
-{
-  int newfd;
-  int err;
-
-  newfd = fcntl(fd, F_DUPFD_CLOEXEC, 10);
-  
-  err = newfd < 0 ? errno : 0;
-  if (err == EBADF) {
-    newfd = -1;
-  } else if (err) {
-    newfd = -2;
-  }
-
-  return newfd;
-}
-
 /*
  * Move a file descriptor to > 10.  Invokes sh_error on error unless
  * the original file dscriptor is not open.
@@ -480,48 +210,8 @@ savefd(int from, int ofd)
 }
 
 
-int
-redirectsafe(union node *redir, int flags)
-{
-        int err;
-        volatile int saveint;
-        struct jmploc *volatile savehandler = handler;
-        struct jmploc jmploc;
-
-	SAVEINT(saveint);
-	if (!(err = setjmp(jmploc.loc) * 2)) {
-		handler = &jmploc;
-		redirect(redir, flags);
-	}
-	restore_handler_expandarg(savehandler, err);
-	RESTOREINT(saveint);
-	return err;
-}
-
-
 void unwindredir(struct redirtab *stop)
 {
         while (redirlist != stop)
                 popredir(0);
-}
-
-
-struct redirtab *pushredir(union node *redir)
-{
-        struct redirtab *sv;
-        struct redirtab *q;
-        int i;
-
-        q = redirlist;
-        if (!redir)
-                goto out;
-
-        sv = ckmalloc(sizeof (struct redirtab));
-        sv->next = q;
-        redirlist = sv;
-        for (i = 0; i < 10; i++)
-                sv->renamed[i] = EMPTY;
-
-out:
-        return q;
 }
