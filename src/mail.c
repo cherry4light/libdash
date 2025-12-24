@@ -31,30 +31,3 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-
-/*
- * Routines to check for mail.  (Perhaps make part of main.c?)
- */
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <stdlib.h>
-#include <stdio.h>
-
-#include "shell.h"
-#include "nodes.h"
-#include "var.h"
-#include "output.h"
-#include "memalloc.h"
-#include "error.h"
-#include "mail.h"
-#include "mystring.h"
-
-/* Set if MAIL or MAILPATH is changed. */
-static int changed;
-
-
-void
-changemail(const char *val)
-{
-	changed++;
-}

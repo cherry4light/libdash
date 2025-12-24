@@ -33,5 +33,3 @@
  *
  *	@(#)mail.h	8.2 (Berkeley) 5/4/95
  */
-
-void changemail(const char *);

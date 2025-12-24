@@ -83,12 +83,7 @@ char linenovar[sizeof("LINENO=")+sizeof(int)*CHAR_BIT/3+1] = "LINENO=";
 
 /* Some macros in var.h depend on the order, add new variables to the end. */
 struct var varinit[] = {
-#if ATTY
-	{ 0,	VSTRFIXED|VTEXTFIXED|VUNSET,	"ATTY\0",	0 },
-#endif
 	{ 0,	VSTRFIXED|VTEXTFIXED,		defifsvar,	0 },
-	{ 0,	VSTRFIXED|VTEXTFIXED|VUNSET,	"MAIL\0",	changemail },
-	{ 0,	VSTRFIXED|VTEXTFIXED|VUNSET,	"MAILPATH\0",	changemail },
 	{ 0,	VSTRFIXED|VTEXTFIXED,		defpathvar,	changepath },
 	{ 0,	VSTRFIXED|VTEXTFIXED,		"PS1=$ ",	0 },
 	{ 0,	VSTRFIXED|VTEXTFIXED,		"PS2=> ",	0 },
@@ -108,33 +103,6 @@ STATIC struct var *vartab[VTABSIZE];
 STATIC struct var **hashvar(const char *);
 STATIC int vpcmp(const void *, const void *);
 STATIC struct var **findvar(struct var **, const char *);
-
-
-/*
- * This routine initializes the builtin variables.  It is called when the
- * shell is initialized.
- */
-
-void
-initvar(void)
-{
-	struct var *vp;
-	struct var *end;
-	struct var **vpp;
-
-	vp = varinit;
-	end = vp + sizeof(varinit) / sizeof(varinit[0]);
-	do {
-		vpp = hashvar(vp->text);
-		vp->next = *vpp;
-		*vpp = vp;
-	} while (++vp < end);
-	/*
-	 * PS1 depends on uid
-	 */
-	if (!geteuid())
-		vps1.text = "PS1=# ";
-}
 
 /*
  * Set the value of a variable.  The flags argument is ored with the
