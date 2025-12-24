@@ -58,7 +58,6 @@
 #include "init.h"
 #include "mystring.h"
 #include "exec.h"
-#include "cd.h"
 
 #define PROFILE 0
 
