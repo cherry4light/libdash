@@ -112,7 +112,6 @@ static struct arglist exparg;
 
 static char *argstr(char *p, int flag);
 static char *exptilde(char *startp, int flag);
-static char *expari(char *start, int flag);
 static size_t strtodest(const char *p, int flags);
 static size_t memtodest(const char *p, size_t len, int flags);
 STATIC ssize_t varvalue(char *, int, int, int);
@@ -319,51 +318,6 @@ removerecordregions(int endoff)
 		ifslastp->endoff = endoff;
 }
 
-
-/*
- * Expand arithmetic expression.  Backup to start of expression,
- * evaluate, place result in (backed up) result, adjust string position.
- */
-static char *expari(char *start, int flag)
-{
-	struct stackmark sm;
-	int begoff;
-	int endoff;
-	int len;
-	intmax_t result;
-	char *p;
-
-	p = stackblock();
-	begoff = expdest - p;
-	p = argstr(start, flag & EXP_DISCARD);
-
-	if (flag & EXP_DISCARD)
-		goto out;
-
-	start = stackblock();
-	endoff = expdest - start;
-	start += begoff;
-	STADJUST(start - expdest, expdest);
-
-	removerecordregions(begoff);
-
-	if (likely(flag & QUOTES_ESC))
-		rmescapes(start);
-
-	pushstackmark(&sm, endoff);
-	result = arith(start);
-	popstackmark(&sm);
-
-	len = cvtnum(result, flag);
-
-	if (likely(!(flag & EXP_QUOTED)))
-		recordregion(begoff, begoff + len, 0);
-
-out:
-	return p;
-}
-
-
 static char *scanleft(char *startp, char *endp, char *rmesc, char *rmescend,
 		      char *str, int quotes, int zero
 ) {
@@ -425,91 +379,6 @@ static char *scanright(char *startp, char *endp, char *rmesc, char *rmescend,
 		}
 	}
 	return 0;
-}
-
-static char *subevalvar(char *start, char *str, int strloc, int startloc,
-			int varflags, int flag)
-{
-	int subtype = varflags & VSTYPE;
-	int quotes = flag & QUOTES_ESC;
-	char *startp;
-	char *loc;
-	long amount;
-	char *rmesc, *rmescend;
-	int zero;
-	char *(*scan)(char *, char *, char *, char *, char *, int , int);
-	int nstrloc = strloc;
-	char *endp;
-	char *p;
-
-	p = argstr(start, (flag & EXP_DISCARD) | EXP_TILDE |
-			  (str ?  0 : EXP_CASE));
-	if (flag & EXP_DISCARD)
-		return p;
-
-	startp = stackblock() + startloc;
-
-	switch (subtype) {
-	case VSASSIGN:
-		setvar(str, startp, 0);
-
-		loc = startp;
-		goto out;
-
-	case VSQUESTION:
-		varunset(start, str, startp, varflags);
-		/* NOTREACHED */
-	}
-
-	subtype -= VSTRIMRIGHT;
-#ifdef DEBUG
-	if (subtype < 0 || subtype > 3)
-		abort();
-#endif
-
-	rmescend = stackblock() + strloc;
-	str = preglob(rmescend, FNMATCH_IS_ENABLED ?
-				RMESCAPE_ALLOC | RMESCAPE_GROW : 0);
-	if (FNMATCH_IS_ENABLED) {
-		startp = stackblock() + startloc;
-		rmescend = stackblock() + strloc;
-		nstrloc = str - (char *)stackblock();
-	}
-
-	rmesc = startp;
-	if (quotes) {
-		rmesc = _rmescapes(startp, RMESCAPE_ALLOC | RMESCAPE_GROW);
-		if (rmesc != startp)
-			rmescend = expdest;
-		startp = stackblock() + startloc;
-		str = stackblock() + nstrloc;
-	}
-	rmescend--;
-
-	/* zero = subtype == VSTRIMLEFT || subtype == VSTRIMLEFTMAX */
-	zero = subtype >> 1;
-	/* VSTRIMLEFT/VSTRIMRIGHTMAX -> scanleft */
-	scan = (subtype & 1) ^ zero ? scanleft : scanright;
-
-	endp = stackblock() + strloc - 1;
-	loc = scan(startp, endp, rmesc, rmescend, str, quotes, zero);
-	if (loc) {
-		if (zero) {
-			memmove(startp, loc, endp - loc);
-			loc = startp + (endp - loc);
-		}
-		*loc = '\0';
-	} else
-		loc = endp;
-
-out:
-	amount = loc - expdest;
-	STADJUST(amount, expdest);
-
-	/* Remove any recorded regions beyond start of variable */
-	removerecordregions(startloc);
-
-	return p;
 }
 
 /*
@@ -1439,27 +1308,6 @@ copy:
 	return r;
 }
 
-
-
-/*
- * See if a pattern matches in a case statement.
- */
-
-int
-casematch(union node *pattern, char *val)
-{
-	struct stackmark smark;
-	int result;
-
-	setstackmark(&smark);
-	argbackq = pattern->narg.backquote;
-	STARTSTACKSTR(expdest);
-	argstr(pattern->narg.text, EXP_TILDE | EXP_CASE);
-	ifsfree();
-	result = patmatch(stackblock(), val);
-	popstackmark(&smark);
-	return result;
-}
 
 /*
  * Our own itoa().

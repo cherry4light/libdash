@@ -68,7 +68,6 @@ union node;
 void expandarg(union node *, struct arglist *, int);
 #define rmescapes(p) _rmescapes((p), 0)
 char *_rmescapes(char *, int);
-int casematch(union node *, char *);
 void recordregion(int, int, int);
 void removerecordregions(int); 
 void ifsbreakup(char *, int, struct arglist *);

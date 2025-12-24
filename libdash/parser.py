@@ -61,7 +61,7 @@ def parse(inputPath, init=True):
     while (True):
         linno_before = parsefile_var.contents.linno - 1; # libdash is 1-indexed
 
-        n_ptr_C = parsecmd_safe (libdash, False)
+        n_ptr_C = parsecmd_safe (libdash)
 
         linno_after = parsefile_var.contents.linno - 1; # libdash is 1-indexed
         nleft_after = parsefile_var.contents.nleft

@@ -93,11 +93,11 @@ def setinputfile (libdash, filename):
     libdash.setinputfile (filename.encode ('utf-8'), 0);
 
 
-def parsecmd_safe (libdash, interactive):
-    libdash.parsecmd_safe.argtypes = [c_int];
+def parsecmd_safe (libdash):
+    libdash.parsecmd_safe.argtypes = [];
     libdash.parsecmd_safe.restype = c_void_p;
 
-    return (libdash.parsecmd_safe (int (interactive)));
+    return (libdash.parsecmd_safe ());
 
 
 # Forward declarations to break recursive dependencies

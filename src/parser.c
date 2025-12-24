@@ -141,16 +141,14 @@ static inline int realeofmark(const char *eofmark)
 // libdash
 /* 2018-09-25 manually install a handler here so we can return an appropriate error code */
 union node *
-parsecmd_safe(int interact)
+parsecmd_safe()
 {
 	struct jmploc jmploc;
 
 	tokpushback = 0;
 	checkkwd = 0;
 	heredoclist = 0;
-	doprompt = interact;
-	if (doprompt)
-		setprompt(doprompt);
+
 	needprompt = 0;
 
         if (unlikely(setjmp(jmploc.loc))) {
