@@ -248,19 +248,6 @@ onsig(int signo)
  */
 
 
-void
-setinteractive(int on)
-{
-	static int is_interactive;
-
-	if (++on == is_interactive)
-		return;
-	is_interactive = on;
-	setsignal(SIGINT);
-	setsignal(SIGQUIT);
-	setsignal(SIGTERM);
-}
-
 void sigblockall(sigset_t *oldmask)
 {
 	sigset_t mask;

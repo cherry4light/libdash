@@ -39,21 +39,12 @@ extern int exitstatus;		/* exit status of last command */
 extern int back_exitstatus;	/* exit status of backquoted command */
 extern int savestatus;		/* exit status of last command outside traps */
 
-
-struct backcmd {		/* result of evalbackcmd */
-	int fd;			/* file descriptor to read from */
-	char *buf;		/* buffer */
-	int nleft;		/* number of chars in buffer */
-	struct job *jp;		/* job structure for command */
-};
-
 /* flags in argument to evaltree */
 #define EV_EXIT 01		/* exit after evaluating tree */
 #define EV_TESTED 02		/* exit status is checked; ignore -e flag */
 
 union node;	/* BLETCH for ansi C */
 int evaltree(union node *, int);
-void evalbackcmd(union node *, struct backcmd *);
 
 extern int evalskip;
 

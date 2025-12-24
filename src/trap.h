@@ -44,7 +44,6 @@ extern volatile sig_atomic_t gotsigchld;
 void setsignal(int);
 void ignoresig(int);
 void onsig(int);
-void setinteractive(int);
 void sigblockall(sigset_t *oldmask);
 
 static inline int have_traps(void)

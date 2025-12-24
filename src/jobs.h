@@ -37,11 +37,6 @@
 #include <inttypes.h>
 #include <sys/types.h>
 
-/* Mode argument to forkshell.  Don't change FORK_FG or FORK_BG. */
-#define FORK_FG 0
-#define FORK_BG 1
-#define FORK_NOJOB 2
-
 /*
  * A job structure contains information about a job.  A job is either a
  * single process or a set of processes contained in a pipeline.  In the
@@ -88,13 +83,7 @@ extern int jobctl;		/* true if doing job control */
 #endif
 extern int vforked;		/* Set if we are in the vforked child */
 
-void setjobctl(int);
 struct output;
 struct job *makejob(union node *, int);
-int forkshell(struct job *, union node *, int);
 int waitforjob(struct job *);
 int stoppedjobs(void);
-
-#if ! JOBS
-#define setjobctl(on) ((void)(on))	/* do nothing */
-#endif

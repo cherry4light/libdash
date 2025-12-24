@@ -91,8 +91,6 @@ static unsigned njobs;
 pid_t backgndpid;
 
 #if JOBS
-/* pgrp of shell on invocation */
-static int initialpgrp;
 /* control terminal */
 static int ttyfd = -1;
 #endif
@@ -104,12 +102,9 @@ static struct job *curjob;
 int vforked;
 
 STATIC void set_curjob(struct job *, unsigned);
-STATIC int jobno(const struct job *);
 STATIC int sprint_status(char *, int, int);
 STATIC void freejob(struct job *);
 STATIC struct job *growjobtab(void);
-STATIC void forkchild(struct job *, union node *, int);
-STATIC void forkparent(struct job *, union node *, int, pid_t);
 STATIC int dowait(int, struct job *);
 #ifdef SYSV
 STATIC int onsigchild(void);
@@ -119,7 +114,6 @@ STATIC char *commandtext(union node *);
 STATIC void cmdtxt(union node *);
 STATIC void cmdlist(union node *, int);
 STATIC void cmdputs(const char *);
-STATIC void showpipe(struct job *, struct output *);
 STATIC int getstatus(struct job *);
 
 #if JOBS
@@ -185,67 +179,7 @@ set_curjob(struct job *jp, unsigned mode)
 
 int jobctl;
 
-void
-setjobctl(int on)
-{
-	int fd;
-	int pgrp;
-
-	if (on == jobctl || rootshell == 0)
-		return;
-	if (on) {
-		int ofd;
-		ofd = fd = sh_open(_PATH_TTY, O_RDWR, 1);
-		if (fd < 0) {
-			fd += 3;
-			while (!isatty(fd))
-				if (--fd < 0)
-					goto out;
-		}
-		fd = savefd(fd, ofd);
-		do { /* while we are in the background */
-			if ((pgrp = tcgetpgrp(fd)) < 0) {
-out:
-				sh_warnx("can't access tty; job control turned off");
-				mflag = on = 0;
-				goto close;
-			}
-			if (pgrp == getpgrp())
-				break;
-			killpg(0, SIGTTIN);
-		} while (1);
-		initialpgrp = pgrp;
-
-		setsignal(SIGTSTP);
-		setsignal(SIGTTOU);
-		setsignal(SIGTTIN);
-		pgrp = rootpid;
-		setpgid(0, pgrp);
-		xtcsetpgrp(fd, pgrp);
-	} else {
-		/* turning job control off */
-		fd = ttyfd;
-		pgrp = initialpgrp;
-		xtcsetpgrp(fd, pgrp);
-		setpgid(0, pgrp);
-		setsignal(SIGTSTP);
-		setsignal(SIGTTOU);
-		setsignal(SIGTTIN);
-close:
-		close(fd);
-		fd = -1;
-	}
-	ttyfd = fd;
-	jobctl = on;
-}
 #endif
-
-
-STATIC int
-jobno(const struct job *jp)
-{
-	return jp - jobtab + 1;
-}
 
 #if JOBS
 
@@ -395,136 +329,6 @@ growjobtab(void)
 		jq->used = 0;
 	} while (--jq >= jp);
 	return jp;
-}
-
-
-/*
- * Fork off a subshell.  If we are doing job control, give the subshell its
- * own process group.  Jp is a job structure that the job is to be added to.
- * N is the command that will be evaluated by the child.  Both jp and n may
- * be NULL.  The mode parameter can be one of the following:
- *	FORK_FG - Fork off a foreground process.
- *	FORK_BG - Fork off a background process.
- *	FORK_NOJOB - Like FORK_FG, but don't give the process its own
- *		     process group even if job control is on.
- *
- * When job control is turned off, background processes have their standard
- * input redirected to /dev/null (except for the second and later processes
- * in a pipeline).
- *
- * Called with interrupts off.
- */
-
-static void forkchild(struct job *jp, union node *n, int mode)
-{
-	int lvforked;
-	int oldlvl;
-
-	TRACE(("Child shell %d\n", getpid()));
-
-	oldlvl = shlvl;
-	lvforked = vforked;
-
-	if (!lvforked) {
-		shlvl++;
-
-		forkreset();
-
-#if JOBS
-		/* do job control only in root shell */
-		jobctl = 0;
-#endif
-	}
-
-#if JOBS
-	if (mode != FORK_NOJOB && jp->jobctl && !oldlvl) {
-		pid_t pgrp;
-
-		if (jp->nprocs == 0)
-			pgrp = getpid();
-		else
-			pgrp = jp->ps[0].pid;
-		/* This can fail because we are doing it in the parent also */
-		(void)setpgid(0, pgrp);
-		if (mode == FORK_FG)
-			xtcsetpgrp(ttyfd, pgrp);
-		setsignal(SIGTSTP);
-		setsignal(SIGTTOU);
-	} else
-#endif
-	if (mode == FORK_BG) {
-		ignoresig(SIGINT);
-		ignoresig(SIGQUIT);
-		if (jp->nprocs == 0) {
-			close(0);
-			sh_open(_PATH_DEVNULL, O_RDONLY, 0);
-		}
-	}
-	if (!oldlvl && iflag) {
-		setsignal(SIGINT);
-		setsignal(SIGQUIT);
-		setsignal(SIGTERM);
-	}
-
-	if (lvforked)
-		return;
-
-	for (jp = curjob; jp; jp = jp->prev_job)
-		freejob(jp);
-}
-
-static void forkparent(struct job *jp, union node *n, int mode, pid_t pid)
-{
-	if (pid < 0) {
-		TRACE(("Fork failed, errno=%d", errno));
-		if (jp)
-			freejob(jp);
-		sh_error("Cannot fork");
-		/* NOTREACHED */
-	}
-
-	TRACE(("In parent shell:  child = %d\n", pid));
-	if (!jp)
-		return;
-#if JOBS
-	if (mode != FORK_NOJOB && jp->jobctl) {
-		int pgrp;
-
-		if (jp->nprocs == 0)
-			pgrp = pid;
-		else
-			pgrp = jp->ps[0].pid;
-		/* This can fail because we are doing it in the child also */
-		(void)setpgid(pid, pgrp);
-	}
-#endif
-	if (mode == FORK_BG) {
-		backgndpid = pid;		/* set $! */
-		set_curjob(jp, CUR_RUNNING);
-	}
-	if (jp) {
-		struct procstat *ps = &jp->ps[jp->nprocs++];
-		ps->pid = pid;
-		ps->status = -1;
-		ps->cmd = nullstr;
-		if (jobctl && n)
-			ps->cmd = commandtext(n);
-	}
-}
-
-int
-forkshell(struct job *jp, union node *n, int mode)
-{
-	int pid;
-
-	TRACE(("forkshell(%%%d, %p, %d) called\n", jobno(jp), n, mode));
-	pid = fork();
-	if (pid == 0)
-		forkchild(jp, n, mode);
-	else
-		forkparent(jp, n, mode, pid);
-
-	return pid;
 }
 
 /*
@@ -1032,20 +836,6 @@ dostr:
 	}
 	*nextc = 0;
 	cmdnextc = nextc;
-}
-
-
-STATIC void
-showpipe(struct job *jp, struct output *out)
-{
-	struct procstat *sp;
-	struct procstat *spend;
-
-	spend = jp->ps + jp->nprocs;
-	for (sp = jp->ps + 1; sp < spend; sp++)
-		outfmt(out, " | %s", sp->cmd);
-	outcslow('\n', out);
-	flushall();
 }
 
 

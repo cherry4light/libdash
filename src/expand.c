@@ -113,8 +113,6 @@ static struct arglist exparg;
 static char *argstr(char *p, int flag);
 static char *exptilde(char *startp, int flag);
 static char *expari(char *start, int flag);
-STATIC void expbackq(union node *, int);
-STATIC char *evalvar(char *, int);
 static size_t strtodest(const char *p, int flags);
 static size_t memtodest(const char *p, size_t len, int flags);
 STATIC ssize_t varvalue(char *, int, int, int);
@@ -220,7 +218,8 @@ out:
 	ifsfree();
 }
 
-
+#include <stdio.h>
+//+
 
 /*
  * Perform variable and command substitution.  If EXP_FULL is set, output CTLESC
@@ -230,116 +229,10 @@ out:
 
 static char *argstr(char *p, int flag)
 {
-	static const char spclchars[] = {
-		'=',
-		':',
-		CTLQUOTEMARK,
-		CTLENDVAR,
-		CTLESC,
-		CTLVAR,
-		CTLBACKQ,
-		CTLARI,
-		CTLENDARI,
-		0
-	};
-	const char *reject = spclchars;
-	int c;
-	int breakall = (flag & (EXP_WORD | EXP_QUOTED)) == EXP_WORD;
-	int inquotes;
-	size_t length;
-	int startloc;
+	printf("!argstr! \n");
+	exit(114);
 
-	reject += !!(flag & EXP_VARTILDE2);
-	reject += flag & EXP_VARTILDE ? 0 : 2;
-	inquotes = 0;
-	length = 0;
-	if (flag & EXP_TILDE) {
-		flag &= ~EXP_TILDE;
-tilde:
-		if (*p == '~')
-			p = exptilde(p, flag);
-	}
-start:
-	startloc = expdest - (char *)stackblock();
-	for (;;) {
-		int end;
-
-		length += strcspn(p + length, reject);
-		end = 0;
-		c = (signed char)p[length];
-		if (!(c & 0x80) || c == CTLENDARI || c == CTLENDVAR) {
-			/*
-			 * c == '=' || c == ':' || c == '\0' ||
-			 * c == CTLENDARI || c == CTLENDVAR
-			 */
-			length++;
-			/* c == '\0' || c == CTLENDARI || c == CTLENDVAR */
-			end = !!((c - 1) & 0x80);
-		}
-		if (length > 0 && !(flag & EXP_DISCARD)) {
-			int newloc;
-			char *q;
-
-			q = stnputs(p, length, expdest);
-			q[-1] &= end - 1;
-			expdest = q - (flag & EXP_WORD ? end : 0);
-			newloc = q - (char *)stackblock() - end;
-			if (breakall && !inquotes && newloc > startloc) {
-				recordregion(startloc, newloc, 0);
-			}
-			startloc = newloc;
-		}
-		p += length + 1;
-		length = 0;
-
-		if (end)
-			break;
-
-		switch (c) {
-		case '=':
-			flag |= EXP_VARTILDE2;
-			reject++;
-			/* fall through */
-		case ':':
-			/*
-			 * sort of a hack - expand tildes in variable
-			 * assignments (after the first '=' and after ':'s).
-			 */
-			if (*--p == '~') {
-				goto tilde;
-			}
-			continue;
-		case CTLQUOTEMARK:
-			/* "$@" syntax adherence hack */
-			if (!inquotes && !memcmp(p, dolatstr + 1,
-						 DOLATSTRLEN - 1)) {
-				p = evalvar(p + 1, flag | EXP_QUOTED) + 1;
-				goto start;
-			}
-			inquotes ^= EXP_QUOTED;
-addquote:
-			if (flag & QUOTES_ESC) {
-				p--;
-				length++;
-				startloc++;
-			}
-			break;
-		case CTLESC:
-			startloc++;
-			length++;
-			goto addquote;
-		case CTLVAR:
-			p = evalvar(p, flag | inquotes);
-			goto start;
-		case CTLBACKQ:
-			expbackq(argbackq->n, flag | inquotes);
-			goto start;
-		case CTLARI:
-			p = expari(p, flag | inquotes);
-			goto start;
-		}
-	}
-	return p - 1;
+	return "?";
 }
 
 static char *exptilde(char *startp, int flag)
@@ -468,74 +361,6 @@ static char *expari(char *start, int flag)
 
 out:
 	return p;
-}
-
-
-/*
- * Expand stuff in backwards quotes.
- */
-
-STATIC void
-expbackq(union node *cmd, int flag)
-{
-	struct backcmd in;
-	int i;
-	char buf[128];
-	char *p;
-	char *dest;
-	int startloc;
-	struct stackmark smark;
-
-	if (flag & EXP_DISCARD)
-		goto out;
-
-	INTOFF;
-	startloc = expdest - (char *)stackblock();
-	pushstackmark(&smark, startloc);
-	evalbackcmd(cmd, (struct backcmd *) &in);
-	popstackmark(&smark);
-
-	p = in.buf;
-	i = in.nleft;
-	if (i == 0)
-		goto read;
-	for (;;) {
-		memtodest(p, i, flag);
-read:
-		if (in.fd < 0)
-			break;
-		do {
-			i = read(in.fd, buf, sizeof buf);
-		} while (i < 0 && errno == EINTR);
-		TRACE(("expbackq: read returns %d\n", i));
-		if (i <= 0)
-			break;
-		p = buf;
-	}
-
-	if (in.buf)
-		ckfree(in.buf);
-	if (in.fd >= 0) {
-		close(in.fd);
-		back_exitstatus = waitforjob(in.jp);
-	}
-	INTON;
-
-	/* Eat all trailing newlines */
-	dest = expdest;
-	for (; dest > ((char *)stackblock() + startloc) && dest[-1] == '\n';)
-		STUNPUTC(dest);
-	expdest = dest;
-
-	if (!(flag & EXP_QUOTED))
-		recordregion(startloc, dest - (char *)stackblock(), 0);
-	TRACE(("evalbackq: size=%d: \"%.*s\"\n",
-		(dest - (char *)stackblock()) - startloc,
-		(dest - (char *)stackblock()) - startloc,
-		stackblock() + startloc));
-
-out:
-	argbackq = argbackq->next;
 }
 
 
@@ -686,116 +511,6 @@ out:
 
 	return p;
 }
-
-
-/*
- * Expand a variable, and return a pointer to the next character in the
- * input string.
- */
-STATIC char *
-evalvar(char *p, int flag)
-{
-	int subtype;
-	int varflags;
-	char *var;
-	int patloc;
-	int startloc;
-	ssize_t varlen;
-	int discard;
-	int quoted;
-
-	varflags = *p++ & ~VSBIT;
-	subtype = varflags & VSTYPE;
-
-	quoted = flag & EXP_QUOTED;
-	var = p;
-	startloc = expdest - (char *)stackblock();
-	p = strchr(p, '=') + 1;
-
-again:
-	varlen = varvalue(var, varflags, flag, quoted);
-	if (varflags & VSNUL)
-		varlen--;
-
-	discard = varlen < 0 ? EXP_DISCARD : 0;
-
-	switch (subtype) {
-	case VSPLUS:
-		discard ^= EXP_DISCARD;
-		/* fall through */
-
-	case 0:
-	case VSMINUS:
-		p = argstr(p, flag | EXP_TILDE | EXP_WORD |
-			      (discard ^ EXP_DISCARD));
-		goto record;
-
-	case VSASSIGN:
-	case VSQUESTION:
-		p = subevalvar(p, var, 0, startloc, varflags,
-			       (flag & ~QUOTES_ESC) |
-			       (discard ^ EXP_DISCARD));
-
-		if ((flag | ~discard) & EXP_DISCARD)
-			goto record;
-
-		varflags &= ~VSNUL;
-		subtype = VSNORMAL;
-		goto again;
-	}
-
-	if ((discard & ~flag) && uflag)
-		varunset(p, var, 0, 0);
-
-	if (subtype == VSLENGTH) {
-		p++;
-		if (flag & EXP_DISCARD)
-			return p;
-		cvtnum(varlen > 0 ? varlen : 0, flag);
-		goto really_record;
-	}
-
-	if (subtype == VSNORMAL)
-		goto record;
-
-#ifdef DEBUG
-	switch (subtype) {
-	case VSTRIMLEFT:
-	case VSTRIMLEFTMAX:
-	case VSTRIMRIGHT:
-	case VSTRIMRIGHTMAX:
-		break;
-	default:
-		abort();
-	}
-#endif
-
-	flag |= discard;
-	if (!(flag & EXP_DISCARD)) {
-		/*
-		 * Terminate the string and start recording the pattern
-		 * right after it
-		 */
-		STPUTC('\0', expdest);
-	}
-
-	patloc = expdest - (char *)stackblock();
-	p = subevalvar(p, NULL, patloc, startloc, varflags, flag);
-
-record:
-	if ((flag | discard) & EXP_DISCARD)
-		return p;
-
-really_record:
-	if (quoted) {
-		quoted = *var == '@' && shellparam.nparam;
-		if (!quoted)
-			return p;
-	}
-	recordregion(startloc, expdest - (char *)stackblock(), quoted);
-	return p;
-}
-
 
 /*
  * Put a string on the stack.
