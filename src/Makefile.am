@@ -23,7 +23,7 @@ lib_LTLIBRARIES = libdash.la dlldash.la
 
 libdash_la_SOURCES = \
 	alias.c arith_yacc.c arith_yylex.c error.c eval.c exec.c expand.c \
-	histedit.c input.c jobs.c mail.c main.c memalloc.c \
+	histedit.c input.c jobs.c main.c memalloc.c \
 	mystring.c options.c parser.c redir.c show.c trap.c output.c \
 	system.c bltin/test.c bltin/times.c var.c \
 	builtins.c init.c nodes.c signames.c syntax.c
@@ -32,7 +32,7 @@ libdash_la_LDFLAGS = -shared -dynamic
 
 dlldash_la_SOURCES = \
 	alias.c arith_yacc.c arith_yylex.c error.c eval.c exec.c expand.c \
-	histedit.c input.c jobs.c mail.c main.c memalloc.c \
+	histedit.c input.c jobs.c main.c memalloc.c \
 	mystring.c options.c parser.c redir.c show.c trap.c output.c \
 	system.c bltin/test.c bltin/times.c var.c \
 	builtins.c init.c nodes.c signames.c syntax.c
@@ -41,7 +41,7 @@ dlldash_la_LDFLAGS = -shared -dynamic -module
 
 dash_CFILES = \
 	alias.c arith_yacc.c arith_yylex.c error.c eval.c exec.c expand.c \
-	histedit.c input.c jobs.c mail.c main.c memalloc.c \
+	histedit.c input.c jobs.c main.c memalloc.c \
 	mystring.c options.c parser.c redir.c show.c trap.c output.c \
 	system.c bltin/test.c bltin/times.c var.c
 dash_SOURCES = \

@@ -110,7 +110,6 @@ STATIC int dowait(int, struct job *);
 STATIC int onsigchild(void);
 #endif
 STATIC int waitproc(int, int *);
-STATIC char *commandtext(union node *);
 STATIC void cmdtxt(union node *);
 STATIC void cmdlist(union node *, int);
 STATIC void cmdputs(const char *);
@@ -564,25 +563,6 @@ out:
 	return retval;
 }
 
-/*
- * Return a string identifying a command (to be printed by the
- * jobs command).
- */
-
-STATIC char *cmdnextc;
-
-STATIC char *
-commandtext(union node *n)
-{
-	char *name;
-
-	STARTSTACKSTR(cmdnextc);
-	cmdtxt(n);
-	name = stackblock();
-	TRACE(("commandtext: name %p, end %p\n", name, cmdnextc));
-	return savestr(name);
-}
-
 
 STATIC void
 cmdtxt(union node *n)
@@ -750,6 +730,7 @@ cmdlist(union node *np, int sep)
 	}
 }
 
+STATIC char *cmdnextc;
 
 STATIC void
 cmdputs(const char *s)

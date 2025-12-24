@@ -111,10 +111,8 @@ static struct ifsregion *ifslastp;
 static struct arglist exparg;
 
 static char *argstr(char *p, int flag);
-static char *exptilde(char *startp, int flag);
 static size_t strtodest(const char *p, int flags);
 static size_t memtodest(const char *p, size_t len, int flags);
-STATIC ssize_t varvalue(char *, int, int, int);
 STATIC void expandmeta(struct strlist *);
 #ifdef HAVE_GLOB
 static void addglob(const glob64_t *);
@@ -132,9 +130,6 @@ STATIC int pmatch(const char *, const char *);
 #endif
 static size_t cvtnum(intmax_t num, int flags);
 STATIC size_t esclen(const char *, const char *);
-STATIC void varunset(const char *, const char *, const char *, int)
-	__attribute__((__noreturn__));
-
 
 /*
  * Prepare a pattern for a glob(3) call.
@@ -234,51 +229,6 @@ static char *argstr(char *p, int flag)
 	return "?";
 }
 
-static char *exptilde(char *startp, int flag)
-{
-	signed char c;
-	char *name;
-	const char *home;
-	char *p;
-
-	p = startp;
-	name = p + 1;
-
-	while ((c = *++p) != '\0') {
-		switch(c) {
-		case CTLESC:
-			return (startp);
-		case CTLQUOTEMARK:
-			return (startp);
-		case ':':
-			if (flag & EXP_VARTILDE)
-				goto done;
-			break;
-		case '/':
-		case CTLENDVAR:
-			goto done;
-		}
-	}
-done:
-	if (flag & EXP_DISCARD)
-		goto out;
-	*p = '\0';
-	if (*name == '\0') {
-		home = lookupvar(homestr);
-	} else {
-		home = getpwhome(name);
-	}
-	*p = c;
-	if (!home)
-		goto lose;
-	strtodest(home, flag | EXP_QUOTED);
-out:
-	return (p);
-lose:
-	return (startp);
-}
-
-
 void 
 removerecordregions(int endoff)
 {
@@ -316,69 +266,6 @@ removerecordregions(int endoff)
 	}
 	if (ifslastp->endoff > endoff)
 		ifslastp->endoff = endoff;
-}
-
-static char *scanleft(char *startp, char *endp, char *rmesc, char *rmescend,
-		      char *str, int quotes, int zero
-) {
-	char *loc;
-	char *loc2;
-	char c;
-
-	loc = startp;
-	loc2 = rmesc;
-	do {
-		int match;
-		const char *s = loc2;
-		c = *loc2;
-		if (zero) {
-			*loc2 = '\0';
-			s = rmesc;
-		}
-		match = pmatch(str, s);
-		*loc2 = c;
-		if (match)
-			return loc;
-		if (quotes && *loc == (char)CTLESC)
-			loc++;
-		loc++;
-		loc2++;
-	} while (c);
-	return 0;
-}
-
-
-static char *scanright(char *startp, char *endp, char *rmesc, char *rmescend,
-		       char *str, int quotes, int zero
-) {
-	int esc = 0;
-	char *loc;
-	char *loc2;
-
-	for (loc = endp, loc2 = rmescend; loc >= startp; loc2--) {
-		int match;
-		char c = *loc2;
-		const char *s = loc2;
-		if (zero) {
-			*loc2 = '\0';
-			s = rmesc;
-		}
-		match = pmatch(str, s);
-		*loc2 = c;
-		if (match)
-			return loc;
-		loc--;
-		if (quotes) {
-			if (--esc < 0) {
-				esc = esclen(startp, loc);
-			}
-			if (esc % 2) {
-				esc--;
-				loc--;
-			}
-		}
-	}
-	return 0;
 }
 
 /*
@@ -420,132 +307,6 @@ static size_t strtodest(const char *p, int flags)
 	memtodest(p, len, flags);
 	return len;
 }
-
-
-
-/*
- * Add the value of a specialized variable to the stack string.
- */
-
-STATIC ssize_t
-varvalue(char *name, int varflags, int flags, int quoted)
-{
-	int num;
-	char *p;
-	int i;
-	int sep;
-	char sepc;
-	char **ap;
-	int subtype = varflags & VSTYPE;
-	int discard = (subtype == VSPLUS || subtype == VSLENGTH) |
-		      (flags & EXP_DISCARD);
-	ssize_t len = 0;
-	char c;
-
-	if (!subtype) {
-		if (discard)
-			return -1;
-
-		sh_error("Bad substitution");
-	}
-
-	flags |= EXP_KEEPNUL;
-	flags &= discard ? ~QUOTES_ESC : ~0;
-	sep = (flags & EXP_FULL) << CHAR_BIT;
-
-	switch (*name) {
-	case '$':
-		num = rootpid;
-		goto numvar;
-	case '?':
-		num = exitstatus;
-		goto numvar;
-	case '#':
-		num = shellparam.nparam;
-		goto numvar;
-	case '!':
-		num = backgndpid;
-		if (num == 0)
-			return -1;
-numvar:
-		len = cvtnum(num, flags);
-		break;
-	case '-':
-		p = makestrspace(NOPTS, expdest);
-		for (i = NOPTS - 1; i >= 0; i--) {
-			if (optlist[i] && optletters[i]) {
-				USTPUTC(optletters[i], p);
-				len++;
-			}
-		}
-		expdest = p;
-		break;
-	case '@':
-		if (quoted && sep)
-			goto param;
-		/* fall through */
-	case '*':
-		/* We will set c to 0 or ~0 depending on whether
-		 * we're doing field splitting.  We won't do field
-		 * splitting if either we're quoted or sep is zero.
-		 *
-		 * Instead of testing (quoted || !sep) the following
-		 * trick optimises away any branches by using the
-		 * fact that EXP_QUOTED (which is the only bit that
-		 * can be set in quoted) is the same as EXP_FULL <<
-		 * CHAR_BIT (which is the only bit that can be set
-		 * in sep).
-		 */
-#if EXP_QUOTED >> CHAR_BIT != EXP_FULL
-#error The following two lines expect EXP_QUOTED == EXP_FULL << CHAR_BIT
-#endif
-		c = !((quoted | ~sep) & EXP_QUOTED) - 1;
-		sep &= ~quoted;
-		sep |= ifsset() ? (unsigned char)(c & ifsval()[0]) : ' ';
-param:
-		sepc = sep;
-		if (!(ap = shellparam.p))
-			return -1;
-		while ((p = *ap++)) {
-			len += strtodest(p, flags);
-
-			if (*ap && sep) {
-				len++;
-				memtodest(&sepc, 1, flags);
-			}
-		}
-		break;
-	case '0':
-	case '1':
-	case '2':
-	case '3':
-	case '4':
-	case '5':
-	case '6':
-	case '7':
-	case '8':
-	case '9':
-		num = atoi(name);
-		if (num < 0 || num > shellparam.nparam)
-			return -1;
-		p = num ? shellparam.p[num - 1] : arg0;
-		goto value;
-	default:
-		p = lookupvar(name);
-value:
-		if (!p)
-			return -1;
-
-		len = strtodest(p, flags);
-		break;
-	}
-
-	if (discard)
-		STADJUST(-len, expdest);
-
-	return len;
-}
-
 
 
 /*
@@ -1320,24 +1081,6 @@ static size_t cvtnum(intmax_t num, int flags)
 
 	len = fmtstr(buf, len, "%" PRIdMAX, num);
 	return memtodest(buf, len, flags);
-}
-
-STATIC void
-varunset(const char *end, const char *var, const char *umsg, int varflags)
-{
-	const char *msg;
-	const char *tail;
-
-	tail = nullstr;
-	msg = "parameter not set";
-	if (umsg) {
-		if (*end == (char)CTLENDVAR) {
-			if (varflags & VSNUL)
-				tail = " or null";
-		} else
-			msg = umsg;
-	}
-	sh_error("%.*s: %s%s", end - var - 1, var, msg, tail);
 }
 
 void restore_handler_expandarg(struct jmploc *savehandler, int err)

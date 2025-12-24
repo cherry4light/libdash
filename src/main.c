@@ -41,7 +41,6 @@
 
 #include "shell.h"
 #include "main.h"
-#include "mail.h"
 #include "options.h"
 #include "output.h"
 #include "parser.h"

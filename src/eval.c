@@ -78,13 +78,6 @@ int savestatus = -1;		/* exit status of last command outside traps */
 /* Prevent PS4 nesting. */
 MKINIT int inps4;
 
-
-#if !defined(__alpha__) || (defined(__GNUC__) && __GNUC__ >= 3)
-STATIC
-#endif
-void evaltreenr(union node *, int) __attribute__ ((__noreturn__));
-
-
 /*
  * Called to reset things after an exception.
  */
@@ -103,32 +96,3 @@ EXITRESET {
 	inps4 = 0;
 }
 #endif
-
-#include <stdio.h>
-
-/*
- * Evaluate a parse tree.  The value is left in the global variable
- * exitstatus.
- */
-
-int
-evaltree(union node *n, int flags)
-{
-	printf("evaltree CALLED! todo: fix\n");
-	return 0;
-}
-
-
-#if !defined(__alpha__) || (defined(__GNUC__) && __GNUC__ >= 3)
-STATIC
-#endif
-void evaltreenr(union node *n, int flags)
-#ifdef HAVE_ATTRIBUTE_ALIAS
-	__attribute__ ((alias("evaltree")));
-#else
-{
-	evaltree(n, flags);
-	abort();
-}
-#endif
-
