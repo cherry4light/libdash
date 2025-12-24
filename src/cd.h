@@ -29,5 +29,3 @@
  * SUCH DAMAGE.
  *
  */
-
-void	setpwd(const char *, int);

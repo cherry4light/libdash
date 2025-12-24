@@ -42,7 +42,6 @@
 
 #include "shell.h"
 #include "nodes.h"
-#include "exec.h"	/* defines padvance() */
 #include "var.h"
 #include "output.h"
 #include "memalloc.h"

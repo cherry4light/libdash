@@ -99,7 +99,6 @@ struct output;
 void showjobs(struct output *, int);
 struct job *makejob(union node *, int);
 int forkshell(struct job *, union node *, int);
-struct job *vforkexec(union node *n, char **argv, const char *path, int idx);
 int waitforjob(struct job *);
 int stoppedjobs(void);
 

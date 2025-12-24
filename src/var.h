@@ -146,7 +146,6 @@ char **listvars(int, int, char ***);
 int showvars(const char *, int, int);
 void mklocal(char *name, int flags);
 struct localvar_list *pushlocalvars(int push);
-void unwindlocalvars(struct localvar_list *stop);
 void unsetvar(const char *);
 int varcmp(const char *, const char *);
 

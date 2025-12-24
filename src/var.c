@@ -109,51 +109,6 @@ STATIC struct var **hashvar(const char *);
 STATIC int vpcmp(const void *, const void *);
 STATIC struct var **findvar(struct var **, const char *);
 
-/*
- * Initialize the varable symbol tables and import the environment
- */
-
-#ifdef mkinit
-INCLUDE <unistd.h>
-INCLUDE <sys/types.h>
-INCLUDE <sys/stat.h>
-INCLUDE "cd.h"
-INCLUDE "output.h"
-INCLUDE "var.h"
-MKINIT char **environ;
-INIT {
-	char **envp;
-	static char ppid[32] = "PPID=";
-	const char *p;
-	struct stat64 st1, st2;
-
-	initvar();
-	for (envp = environ ; *envp ; envp++) {
-		p = endofname(*envp);
-		if (p != *envp && *p == '=') {
-			setvareq(*envp, VEXPORT|VTEXTFIXED);
-		}
-	}
-
-	setvareq(defifsvar, VTEXTFIXED);
-	setvareq(defoptindvar, VTEXTFIXED);
-
-	fmtstr(ppid + 5, sizeof(ppid) - 5, "%ld", (long) getppid());
-	setvareq(ppid, VTEXTFIXED);
-
-	p = lookupvar("PWD");
-	if (p)
-		if (*p != '/' || stat64(p, &st1) || stat64(".", &st2) ||
-		    st1.st_dev != st2.st_dev || st1.st_ino != st2.st_ino)
-			p = 0;
-	setpwd(p, 0);
-}
-
-RESET {
-	unwindlocalvars(0);
-}
-#endif
-
 
 /*
  * This routine initializes the builtin variables.  It is called when the
@@ -445,50 +400,6 @@ void mklocal(char *name, int flags)
 
 
 /*
- * Called after a function returns.
- * Interrupts must be off.
- */
-
-static void
-poplocalvars(void)
-{
-	struct localvar_list *ll;
-	struct localvar *lvp, *next;
-	struct var *vp;
-
-	INTOFF;
-	ll = localvar_stack;
-	localvar_stack = ll->next;
-
-	next = ll->lv;
-	ckfree(ll);
-
-	while ((lvp = next) != NULL) {
-		next = lvp->next;
-		vp = lvp->vp;
-		TRACE(("poplocalvar %s\n", vp ? vp->text : "-"));
-		if (vp == NULL) {	/* $- saved */
-			memcpy(optlist, lvp->text, sizeof(optlist));
-			ckfree(lvp->text);
-			optschanged();
-		} else if (lvp->flags == VUNSET) {
-			vp->flags &= ~(VSTRFIXED|VREADONLY);
-			unsetvar(vp->text);
-		} else {
-			if (vp->func)
-				(*vp->func)(strchrnul(lvp->text, '=') + 1);
-			if ((vp->flags & (VTEXTFIXED|VSTACK)) == 0)
-				ckfree(vp->text);
-			vp->flags = lvp->flags;
-			vp->text = lvp->text;
-		}
-		ckfree(lvp);
-	}
-	INTON;
-}
-
-
-/*
  * Create a new localvar environment.
  */
 struct localvar_list *pushlocalvars(int push)
@@ -511,12 +422,6 @@ out:
 	return top;
 }
 
-
-void unwindlocalvars(struct localvar_list *stop)
-{
-	while (localvar_stack != stop)
-		poplocalvars();
-}
 
 /*
  * Unset the specified variable.

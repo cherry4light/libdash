@@ -87,7 +87,6 @@ extern int checkkwd;
 
 
 int isassignment(const char *p);
-union node *parsecmd(int);
 union node *parsecmd_safe(int); // libdash
 void fixredir(union node *, const char *, int);
 const char *getprompt(void *);

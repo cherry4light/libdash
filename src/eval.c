@@ -104,39 +104,6 @@ EXITRESET {
 }
 #endif
 
-/*
- * Execute a command or commands contained in a string.
- */
-
-int
-evalstring(char *s, int flags)
-{
-	union node *n;
-	struct stackmark smark;
-	int status;
-
-	s = sstrdup(s);
-	setinputstring(s);
-	setstackmark(&smark);
-
-	status = 0;
-	for (; (n = parsecmd(0)) != NEOF; popstackmark(&smark)) {
-		int i;
-
-		i = evaltree(n, flags & ~(parser_eof() ? 0 : EV_EXIT));
-		if (n)
-			status = i;
-
-		if (evalskip)
-			break;
-	}
-	popstackmark(&smark);
-	popfile();
-	stunalloc(s);
-
-	return status;
-}
-
 #include <stdio.h>
 
 /*

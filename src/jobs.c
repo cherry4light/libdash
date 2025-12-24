@@ -619,32 +619,6 @@ forkshell(struct job *jp, union node *n, int mode)
 	return pid;
 }
 
-struct job *vforkexec(union node *n, char **argv, const char *path, int idx)
-{
-	struct job *jp;
-	int pid;
-
-	jp = makejob(n, 1);
-
-	sigblockall(NULL);
-	vforked++;
-
-	pid = vfork();
-
-	if (!pid) {
-		forkchild(jp, n, FORK_FG);
-		sigclearmask();
-		shellexec(argv, path, idx);
-		/* NOTREACHED */
-	}
-
-	vforked = 0;
-	sigclearmask();
-	forkparent(jp, n, FORK_FG, pid);
-
-	return jp;
-}
-
 /*
  * Wait for job to finish.
  *

@@ -73,8 +73,6 @@ extern int etext();
 #endif
 MKINIT struct jmploc main_handler;
 
-static int cmdloop(int);
-
 //libdash
 void
 initialize_dash_errno() 
@@ -84,103 +82,15 @@ initialize_dash_errno()
 #endif
 }
 
-#ifdef MAIN // libdash
-int main(int, char **);
-#endif //MAIN // libdash
-
-/*
- * Main routine.  We initialize things, parse the arguments, execute
- * profiles if we're a login shell, and then call cmdloop to execute
- * commands.  The setjmp call sets up the location to jump to when an
- * exception occurs.  When an exception occurs the variable "state"
- * is used to figure out how far we had gotten.
- */
-
 #ifdef MAIN //libdash
 int
 main(int argc, char **argv)
 {
+	// do nothing
 	return 1;
 }
 
 #endif // MAIN // libdash
-
-/*
- * Read and execute commands.  "Top" is nonzero for the top level command
- * loop; it turns on prompting if the shell is interactive.
- */
-
-static int
-cmdloop(int top)
-{
-	union node *n;
-	struct stackmark smark;
-	int inter;
-	int status = 0;
-	int numeof = 0;
-
-	TRACE(("cmdloop(%d) called\n", top));
-	for (;;) {
-		int skip;
-
-		setstackmark(&smark);
-		if (jobctl)
-			showjobs(out2, SHOW_CHANGED);
-		inter = 0;
-		if (iflag && top) {
-			inter++;
-		}
-		n = parsecmd(inter);
-		/* showtree(n); DEBUG */
-		if (n == NEOF) {
-			if (!top || numeof >= 50)
-				break;
-			if (!stoppedjobs()) {
-				if (!Iflag) {
-					if (iflag) {
-						out2c('\n');
-#ifdef FLUSHERR
-						flushout(out2);
-#endif
-					}
-					break;
-				}
-				out2str("\nUse \"exit\" to leave shell.\n");
-			}
-			numeof++;
-		} else {
-			int i;
-
-			job_warning = (job_warning == 2) ? 1 : 0;
-			numeof = 0;
-			i = evaltree(n, 0);
-			if (n)
-				status = i;
-		}
-		popstackmark(&smark);
-
-		skip = evalskip;
-		if (skip) {
-			evalskip &= ~(SKIPFUNC | SKIPFUNCDEF);
-			break;
-		}
-	}
-
-	return status;
-}
-
-
-/*
- * Read a file containing shell functions.
- */
-
-void
-readcmdfile(char *name)
-{
-	setinputfile(name, INPUT_PUSH_FILE);
-	cmdloop(0);
-	popfile();
-}
 
 #ifdef mkinit
 INCLUDE "error.h"

@@ -60,12 +60,6 @@ struct cmdentry {
 
 union node;
 
-extern const char *pathopt;	/* set by padvance */
-
-void shellexec(char **, const char *, int)
-    __attribute__((__noreturn__));
-int padvance_magic(const char **path, const char *name, int magic);
-void find_command(char *, struct cmdentry *, int, const char *);
 struct builtincmd *find_builtin(const char *);
 void hashcd(void);
 void changepath(const char *);
@@ -74,8 +68,3 @@ void getcmdentry(char *, struct cmdentry *);
 #endif
 void defun(union node *);
 void unsetfunc(const char *);
-
-static inline int padvance(const char **path, const char *name)
-{
-	return padvance_magic(path, name, 1);
-}

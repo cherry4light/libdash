@@ -72,12 +72,6 @@ extern char *minusc;		/* argument to -c option */
 extern char *arg0;		/* $0 */
 extern struct shparam shellparam;  /* $@ */
 extern char **argptr;		/* argument list for builtin commands */
-extern char *optionarg;		/* set by nextopt */
-extern char *optptr;		/* used by nextopt */
 
-int procargs(int, char **);
-void optschanged(void);
-void setparam(char **);
 void freeparam(volatile struct shparam *);
-int nextopt(const char *);
 void getoptsreset(const char *);

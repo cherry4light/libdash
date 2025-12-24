@@ -138,24 +138,6 @@ static inline int realeofmark(const char *eofmark)
 }
 
 
-/*
- * Read and parse a command.  Returns NEOF on end of file.  (NULL is a
- * valid parse tree indicating a blank line.)
- */
-
-union node *
-parsecmd(int interact)
-{
-	tokpushback = 0;
-	checkkwd = 0;
-	heredoclist = 0;
-	doprompt = interact;
-	if (doprompt)
-		setprompt(doprompt);
-	needprompt = 0;
-	return list(1);
-}
-
 // libdash
 /* 2018-09-25 manually install a handler here so we can return an appropriate error code */
 union node *

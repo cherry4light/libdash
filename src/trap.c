@@ -80,8 +80,6 @@ volatile sig_atomic_t gotsigchld;
 
 extern char *signal_names[];
 
-static int decode_signum(const char *);
-
 #ifdef mkinit
 INCLUDE "memalloc.h"
 INCLUDE "trap.h"
@@ -245,55 +243,6 @@ onsig(int signo)
 }
 
 
-
-/*
- * Called to execute a trap.  Perhaps we should avoid entering new trap
- * handlers while we are executing a trap handler.
- */
-
-void dotrap(void)
-{
-	char *p;
-	char *q;
-	int i;
-	int status, last_status;
-
-	if (!pending_sig)
-		return;
-
-	status = savestatus;
-	last_status = status;
-	if (likely(status < 0)) {
-		status = exitstatus;
-		savestatus = status;
-	}
-	pending_sig = 0;
-	barrier();
-
-	for (i = 0, q = gotsig; i < NSIG - 1; i++, q++) {
-		if (!*q)
-			continue;
-
-		if (evalskip) {
-			pending_sig = i + 1;
-			break;
-		}
-
-		*q = 0;
-
-		p = trap[i + 1];
-		if (!p)
-			continue;
-		evalstring(p, 0);
-		if (evalskip != SKIPFUNC)
-			exitstatus = status;
-	}
-
-	savestatus = last_status;
-}
-
-
-
 /*
  * Controls whether the shell is interactive or not.
  */
@@ -310,72 +259,6 @@ setinteractive(int on)
 	setsignal(SIGINT);
 	setsignal(SIGQUIT);
 	setsignal(SIGTERM);
-}
-
-
-
-/*
- * Called to exit the shell.
- */
-
-void
-exitshell(void)
-{
-	struct jmploc loc;
-	char *p;
-
-	savestatus = exitstatus;
-	TRACE(("pid %d, exitshell(%d)\n", getpid(), savestatus));
-	if (setjmp(loc.loc))
-		goto out;
-	handler = &loc;
-	if ((p = trap[0])) {
-		trap[0] = NULL;
-		evalskip = 0;
-		evalstring(p, 0);
-		evalskip = SKIPFUNCDEF;
-	}
-out:
-	exitreset();
-	/*
-	 * Disable job control so that whoever had the foreground before we
-	 * started can get it back.
-	 */
-	if (likely(!setjmp(loc.loc)))
-		setjobctl(0);
-	flushall();
-	_exit(exitstatus);
-	/* NOTREACHED */
-}
-
-static int decode_signum(const char *string)
-{
-	int signo = -1;
-
-	if (is_number(string)) {
-		signo = atoi(string);
-		if (signo >= NSIG)
-			signo = -1;
-	}
-
-	return signo;
-}
-
-int decode_signal(const char *string, int minsig)
-{
-	int signo;
-
-	signo = decode_signum(string);
-	if (signo >= 0)
-		return signo;
-
-	for (signo = minsig; signo < NSIG; signo++) {
-		if (!strcasecmp(string, signal_names[signo])) {
-			return signo;
-		}
-	}
-
-	return -1;
 }
 
 void sigblockall(sigset_t *oldmask)
